@@ -8,6 +8,8 @@
 from datetime import datetime, timedelta
 from typing import List
 import requests
+from urllib.parse import urlencode
+
 
 class MeasurementDay:
     """
@@ -73,25 +75,25 @@ class MeasurementSet:
         """
             return the anomaly rate for all these measurements
         """
-        return self.total_anomalies / self.total_measurements
+        return self.total_anomalies / self.total_measurements if self.total_measurements != 0 else -1
     
     def get_avg_failures(self) -> float:
         """
             return the failure rate for all these measurements
         """
-        return self.total_failures / self.total_measurements
+        return self.total_failures / self.total_measurements if self.total_measurements != 0 else -1
     
     def get_avg_confirmed(self) -> float:
         """
             return the confirmed rate for all these measurements
         """
-        return self.total_confirmed / self.total_measurements
+        return self.total_confirmed / self.total_measurements if self.total_measurements != 0 else -1
 
     def get_avg_weirds(self) -> float:
         """
             return the weirds rate for all these measurements
         """
-        return self.total_weird_behavior / self.total_measurements
+        return self.total_weird_behavior / self.total_measurements if self.total_measurements != 0 else -1 
 
     def add_day(self, day : MeasurementDay):
         """
@@ -190,7 +192,6 @@ def get_measurements_list_api(  since : datetime,
     """
         same as get_measurements but with a different ooni api
     """
-
     assert since <= until, "since date should be before until date"
 
     # The error types
@@ -199,7 +200,7 @@ def get_measurements_list_api(  since : datetime,
     UNKOWN        = "unknown"  
 
     # Set the request arguments 
-    url = "https://api.ooni.io/api/v1/measurements"
+    url = "https://api.ooni.io/api/v1/measurements?"
     params = {
         'since' : since.strftime("%Y-%m-%d"),
         'until' : until.strftime("%Y-%m-%d"),
@@ -209,32 +210,41 @@ def get_measurements_list_api(  since : datetime,
     }
 
     if domain:
-        params['domain'] = domain
+        params['input'] = domain
 
     # filter by test name only if provided
     if test_name:
         params['test_name'] = test_name
 
-    # perform the request
-    req = requests.get(url, params=params)
+    next_url = url + urlencode(params)
+    results = []
+    while next_url != None:
 
-    # Check request status
-    if req.status_code != 200:
-        return NETWORK_ERROR
+        # perform the request
+        try:
+            req = requests.get(next_url)
+        except:
+            return NETWORK_ERROR
+        # Check request status
+        if req.status_code != 200:
+            return NETWORK_ERROR
 
-    data = req.json()   
+        data = req.json()   
 
-    # Check for errors
-    if data.get('error'):
-        return BAD_ARGUMENTS 
+        # Check for errors
+        if data.get('error'):
+            return BAD_ARGUMENTS 
 
-    metadata = data.get("metadata")
-    if not metadata:
-        return UNKOWN
 
-    results = data.get('results')
-    if not results:
-        return UNKOWN
+        metadata = data.get("metadata")
+        if metadata is None:
+            return UNKOWN
+
+        results += data.get('results')
+        if results is None:
+            return UNKOWN
+
+        next_url = metadata.get("next_url")
 
     # compute the days in which we will search measurements
     days = {}

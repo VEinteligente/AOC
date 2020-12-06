@@ -15,27 +15,45 @@ def main():
     
     # 
     if c.error == Config.DATE_FORMAT_ERROR:
-        print("Provided date format is not valid. Expected: YYYY-mm-dd")
+        print("Provided date format is not valid. Expected: YYYY-mm-dd", file=sys.stderr)
         exit(1)
     elif c.error == Config.FILE_ERROR:
-        print("Could not open provided file")
+        print("Could not open provided file", file=sys.stderr)
         exit(1)
     elif c.error == Config.NOT_ENOUGH_ARGS_ERROR:
         print(USAGE)
         exit(1)
     elif c.error == Config.INCONSISTENT_DATES:
-        print("Since date can't  be after until date")
+        print("Since date can't  be after until date", file=sys.stderr)
         exit(1)
     elif c.error != Config.OK:
-        print(f"Error: {c.error}")
+        print(f"Error: {c.error}", file=sys.stderr)
         exit(1)
 
     format_date = lambda d : d.strftime("%Y-%m-%d")
     # Generate table
     rows = days_from_config(c)
+    if len(rows) == 0:
+        print("Could not retrieve any data")
+        exit(0)
+
+    # Print requested data description
     print(f"Showing weird behavior rate since {format_date(c.since)}, until {format_date(c.until)} from list {c.file}")
-    table = [['input'] + [format_date(x.start_day) for x in rows[0].days] + ["total measurements", "total anomalies"]]
-    table += [[dayset.days[0].input[:20]] + [round(day.weird_behavior_ratio,2) for day in dayset.days] + [dayset.total_measurements, dayset.total_anomalies] for dayset in rows]
+    # Add the header to the table
+    table = [['input'] + [format_date(x.start_day) for x in rows[0].days] + ["total measurements", "total anomalies", "total weird behavior rate"]]
+    # Add every row to the table
+    for dayset in rows:
+        table += [
+                    # Input row
+                    [dayset.days[0].input[:30]] + 
+                    # weird behavior rate per day
+                    [   
+                        round(day.weird_behavior_ratio,2) if day.weird_behavior_ratio else "NA" 
+                        for day in dayset.days
+                    ] + 
+                    # total ammount of measurements, anomalies, and total weird rate
+                    [dayset.total_measurements, dayset.total_anomalies, round(dayset.get_avg_weirds(),2)]
+                ]
     
     print(tabulate(table))
 

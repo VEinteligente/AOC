@@ -3,7 +3,7 @@
 """
 # Third party imports
 from typing import List
-
+import sys
 # Internal imports
 import AOCBackend as AOC
 from datetime import datetime
@@ -59,7 +59,8 @@ class Config:
         if len(args) >= 4 and args[3][0] != '-':
             try:
                 with open(args[3], 'r') as file:
-                    self.inputs = file.readlines()
+                    self.inputs = [ line if line[-1] != '\n' else line[:len(line) -1] for line in file.readlines()]
+                    
             except:
                 self.since = None
                 self.until = None
@@ -89,16 +90,16 @@ def days_from_config(config : Config) -> List[AOC.MeasurementSet]:
         print("Getting general measurements...")
         row = AOC.get_measurements(config.since, config.until, None)
         if isinstance(row, str):
-            print(f"Error retrieving general measurements, error: {row}")
+            print(f"Error retrieving general measurements, error: {row}", file=sys.stderr)
         else:
             rows.append(AOC.MeasurementSet(row))
 
     else:
         for dom in config.inputs:
             print(f"Getting measurements for {dom} since {config.since} until {config.until}...")
-            row = AOC.get_measurements(config.since, config.until, dom)
+            row = AOC.get_measurements_list_api(config.since, config.until, dom)
             if isinstance(row, str):
-                print(f"Error retrieving measurements for input {dom}, error: {row}")
+                print(f"Error retrieving measurements for input {dom[:len(dom)-1]}, error: {row}", file=sys.stderr)
             else:
                 rows.append(AOC.MeasurementSet(row))
     return rows
