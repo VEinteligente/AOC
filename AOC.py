@@ -34,8 +34,8 @@ def main():
     # Generate table
     rows = days_from_config(c)
     print(f"Showing weird behavior rate since {format_date(c.since)}, until {format_date(c.until)} from list {c.file}")
-    table = [['input'] + [format_date(x.start_day) for x in rows[0].days]]
-    table += [[dayset.days[0].input[:20]] + [round(day.weird_behavior_ratio,2) for day in dayset.days] + [] for dayset in rows]
+    table = [['input'] + [format_date(x.start_day) for x in rows[0].days] + ["total measurements", "total anomalies"]]
+    table += [[dayset.days[0].input[:20]] + [round(day.weird_behavior_ratio,2) for day in dayset.days] + [dayset.total_measurements, dayset.total_anomalies] for dayset in rows]
     
     print(tabulate(table))
 
