@@ -5,7 +5,7 @@
 import sys
 from tabulate import tabulate
 # local imports
-from AOC_CLI import Config, days_from_config
+from AOC_CLI import Config, days_from_config, StrColors
 
 USAGE = "Usage: \naoc since until file\n    For more details, aoc --help" 
 
@@ -45,14 +45,19 @@ def main():
     for dayset in rows:
         table += [
                     # Input row
-                    [dayset.days[0].input[:30]] + 
+                    [dayset.days[0].input[:30] if dayset.days[0].input else "(no input)"] + 
                     # weird behavior rate per day
                     [   
-                        round(day.weird_behavior_ratio,2) if day.weird_behavior_ratio else "NA" 
+                        f"{StrColors.FAIL if day.weird_behavior_ratio >= c.critical_weird_rate else ''}{round(day.weird_behavior_ratio,3)}{StrColors.ENDC if day.weird_behavior_ratio >= c.critical_weird_rate else ''}" 
+                            if day.weird_behavior_ratio else "NA" 
                         for day in dayset.days
                     ] + 
                     # total ammount of measurements, anomalies, and total weird rate
-                    [dayset.total_measurements, dayset.total_anomalies, round(dayset.get_avg_weirds(),2)]
+                    [
+                        dayset.total_measurements, 
+                        dayset.total_anomalies, 
+                        f"{StrColors.FAIL if dayset.get_avg_weirds() >= c.critical_weird_rate else ''}{round(dayset.get_avg_weirds(),3)}{StrColors.ENDC if dayset.get_avg_weirds() >= c.critical_weird_rate else ''}"
+                    ]
                 ]
     
     print(tabulate(table))
