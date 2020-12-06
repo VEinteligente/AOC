@@ -5,7 +5,7 @@
 """
 
 # Third party imports
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List
 import requests
 
@@ -182,5 +182,90 @@ def get_measurements(   since : datetime,
         for r in result
     ]
 
-     
+def get_measurements_list_api(  since : datetime, 
+                                until : datetime, 
+                                domain : str = None, 
+                                probe_cc : str = 'VE', 
+                                test_name : str = None) -> List[MeasurementDay]:
+    """
+        same as get_measurements but with a different ooni api
+    """
 
+    assert since <= until, "since date should be before until date"
+
+    # The error types
+    NETWORK_ERROR = "network_error"
+    BAD_ARGUMENTS = "bad_arguments"
+    UNKOWN        = "unknown"  
+
+    # Set the request arguments 
+    url = "https://api.ooni.io/api/v1/measurements"
+    params = {
+        'since' : since.strftime("%Y-%m-%d"),
+        'until' : until.strftime("%Y-%m-%d"),
+        'probe_cc' : probe_cc,
+        'order_by' : 'measurement_start_time',
+        'order':"asc"
+    }
+
+    if domain:
+        params['domain'] = domain
+
+    # filter by test name only if provided
+    if test_name:
+        params['test_name'] = test_name
+
+    # perform the request
+    req = requests.get(url, params=params)
+
+    # Check request status
+    if req.status_code != 200:
+        return NETWORK_ERROR
+
+    data = req.json()   
+
+    # Check for errors
+    if data.get('error'):
+        return BAD_ARGUMENTS 
+
+    metadata = data.get("metadata")
+    if not metadata:
+        return UNKOWN
+
+    results = data.get('results')
+    if not results:
+        return UNKOWN
+
+    # compute the days in which we will search measurements
+    days = {}
+    curr_day = datetime(year=since.year, month=since.month, day=since.day)
+    last_day = datetime(year=until.year, month=until.month, day=until.day) 
+    one_day = timedelta(days=1)
+    while curr_day <= last_day:
+        days[curr_day] = {
+            "anomaly_count" : 0,
+            "measurement_count" : 0,
+            "failure_count":0,
+            "confirmed_count":0
+        }
+        curr_day += one_day
+
+    # Now that we have the days, we have to sum the values
+    for m in results:
+        date = datetime.strptime(m['measurement_start_time'][:10], "%Y-%m-%d") 
+        days[date]["anomaly_count"] += m['anomaly']
+        days[date]["measurement_count"] += 1
+        days[date]["failure_count"] += m['failure']
+        days[date]["confirmed_count"] += m['confirmed']
+    
+
+    return [
+                MeasurementDay( metrics['measurement_count'],
+                                metrics["anomaly_count"],
+                                metrics["failure_count"],
+                                d,
+                                domain,
+                                metrics['confirmed_count']) 
+                
+                for (d,metrics) in days.items()
+            ]
