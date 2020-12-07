@@ -265,6 +265,11 @@ class AOCW:
                 "long"  : INIT_N_DAYS_FLAG_LONG,
                 "help"  : INIT_N_DAYS_HELP
             },
+            {
+                "short" : INIT_EMAIL_FLAG,
+                "long"  : INIT_EMAIL_FLAG_LONG,
+                "help"  : INIT_EMAIL_HELP
+            },
         ]
 
 
@@ -352,6 +357,11 @@ class AOCW:
         """
         home = os.environ['HOME']
         aocw_dir : str = os.path.join(home, ".aocw")
+
+        if "-h" in argv or "--help" in argv or len(argv) == 2:
+            AOCW.init_help()
+            self.state = AOCW.ERRORS.OK
+            return
 
         # Parse the provided arguments
         list_file : str = None
@@ -528,6 +538,12 @@ class AOCW:
             self.state = AOCW.ERRORS.COULD_NOT_SETUP_CONFIG_FILE
             return
     
+    def init_help():
+        print(" Initialize local files to store logic and data retrieved from ooni.")
+        print(" Possible arguments to setup the installation:")
+        for f in AOCW.INIT_FLAGS.info:
+            print(f"    {f['short']}, {f['long']}:   {f['help']}\n")
+
     def run(self, argv : List[str]):
         """
             Run this program if it is set up to do so. Load urls from the 
@@ -649,6 +665,8 @@ class AOCW:
         print(f"List file: {YELLOW}{permaConfig.list_file}{ENDC}")
         print(f"Specified critical rate: {RED}{permaConfig.critical_anomaly_rate}{ENDC}")
         print(f"Checking {GREEN}{permaConfig.n_days_before}{ENDC} days before the current day to request for measurements")
+        print(f"Sending notifications from: {YELLOW}{permaConfig.sender_mail}{ENDC}")
+        print(f"Notifying: {YELLOW}{permaConfig.mail_to_notify}{ENDC}")
         if permaConfig.active:
             print(f"Active: {GREEN} true {ENDC}")
         else:
