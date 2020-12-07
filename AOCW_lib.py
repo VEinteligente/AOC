@@ -96,7 +96,7 @@ class PermaConfig:
         config_str : str = self.to_json()
 
         # get path to this file
-        config_path = os.path.join(os.environ['HOME'], ".aocw/" + Config.DEFAULTS.CONFIG_FILE)
+        config_path = os.path.join(os.environ['HOME'], ".aocw/" + AOCW.DEFAULTS.CONFIG_FILE)
 
         # Open the config file for writing
         try:
@@ -111,7 +111,7 @@ class PermaConfig:
             Set this objects values to those in the local storage
         """
         # get path to the config file
-        config_path = os.path.join(os.environ['HOME'], ".aocw/" + Config.DEFAULTS.CONFIG_FILE)
+        config_path = os.path.join(os.environ['HOME'], ".aocw/" + AOCW.DEFAULTS.CONFIG_FILE)
 
         # Open the config file for writing
         try:
@@ -142,7 +142,7 @@ class PermaConfig:
     
 
 
-class Config:
+class AOCW:
     """
         An object defining the configuration provided for the user with 
         every command, to drive the command line program execution.
@@ -201,28 +201,28 @@ class Config:
         """
 
         if len(argv) <= 1:
-            self.state = Config.ERRORS.NOT_ENOUGH_ARGS
+            self.state = AOCW.ERRORS.NOT_ENOUGH_ARGS
             self.action = None
             return
         # Check which action is to be performed
         action = argv[1]
-        if action == Config.ACTIONS.INIT:
-            self.action = Config.ACTIONS.INIT
-        elif action == Config.ACTIONS.SHOW:
-            self.action = Config.ACTIONS.SHOW
-        elif action == Config.ACTIONS.SET:
-            self.action = Config.ACTIONS.SET
-        elif action == Config.ACTIONS.RUN:
-            self.action = Config.ACTIONS.RUN
+        if action == AOCW.ACTIONS.INIT:
+            self.action = AOCW.ACTIONS.INIT
+        elif action == AOCW.ACTIONS.SHOW:
+            self.action = AOCW.ACTIONS.SHOW
+        elif action == AOCW.ACTIONS.SET:
+            self.action = AOCW.ACTIONS.SET
+        elif action == AOCW.ACTIONS.RUN:
+            self.action = AOCW.ACTIONS.RUN
         else:
             self.action = None
-            self.state = Config.ERRORS.INVALID_ACTION
+            self.state = AOCW.ERRORS.INVALID_ACTION
             return
 
         # Perform actions as specified
-        if action == Config.ACTIONS.INIT:
+        if action == AOCW.ACTIONS.INIT:
             self.init(argv)
-        if action == Config.ACTIONS.RUN:
+        if action == AOCW.ACTIONS.RUN:
             self.run(argv)
         else:
             print("Not yet implemented 😿")
@@ -249,63 +249,63 @@ class Config:
         # Parse the provided arguments
         list_file : str = None
         #   set the file
-        if Config.FLAGS.INIT_FILE_FLAG in argv or Config.FLAGS.INIT_FILE_FLAG_LONG in argv:
+        if AOCW.FLAGS.INIT_FILE_FLAG in argv or AOCW.FLAGS.INIT_FILE_FLAG_LONG in argv:
             for i in range(len(argv)):
-                if argv[i] == Config.FLAGS.INIT_FILE_FLAG or argv[i] == Config.FLAGS.INIT_FILE_FLAG_LONG:
+                if argv[i] == AOCW.FLAGS.INIT_FILE_FLAG or argv[i] == AOCW.FLAGS.INIT_FILE_FLAG_LONG:
                     if i == len(argv) - 1:
-                        self.state = Config.ERRORS.INVALID_ARGUMENTS
+                        self.state = AOCW.ERRORS.INVALID_ARGUMENTS
                         return
                     list_file = argv[i+1]
                     try:
                         list_file = os.path.abspath(list_file)
                     except:
-                        self.state = Config.ERRORS.INVALID_ARGUMENTS
+                        self.state = AOCW.ERRORS.INVALID_ARGUMENTS
                         return
 
                     break 
         else:
-            self.state = Config.ERRORS.MISSING_REQUIRED_ARGUMENT
+            self.state = AOCW.ERRORS.MISSING_REQUIRED_ARGUMENT
             return
 
         #   set the critical rate value
-        initial_rate = Config.DEFAULTS.CRITICAL_RATE
-        if Config.FLAGS.INIT_RATE_FLAG in argv or Config.FLAGS.INIT_RATE_FLAG_LONG in argv:
+        initial_rate = AOCW.DEFAULTS.CRITICAL_RATE
+        if AOCW.FLAGS.INIT_RATE_FLAG in argv or AOCW.FLAGS.INIT_RATE_FLAG_LONG in argv:
             for i in range(len(argv)):
-                if argv[i] == Config.FLAGS.INIT_RATE_FLAG or argv[i] == Config.FLAGS.INIT_RATE_FLAG_LONG:
+                if argv[i] == AOCW.FLAGS.INIT_RATE_FLAG or argv[i] == AOCW.FLAGS.INIT_RATE_FLAG_LONG:
                     if i == len(argv) - 1:
-                        self.state = Config.ERRORS.INVALID_ARGUMENTS
+                        self.state = AOCW.ERRORS.INVALID_ARGUMENTS
                         return
                     try:
                         initial_rate = float(argv[i+1])
                         assert initial_rate > 0
                     except:
-                        self.state = Config.ERRORS.INVALID_ARGUMENTS
+                        self.state = AOCW.ERRORS.INVALID_ARGUMENTS
                         return
                     break 
 
         #   set the n-days value
-        n_days_before = Config.DEFAULTS.N_DAYS_BEFORE
-        if Config.FLAGS.INIT_N_DAYS_FLAG in argv or Config.FLAGS.INIT_N_DAYS_FLAG_LONG in argv:
+        n_days_before = AOCW.DEFAULTS.N_DAYS_BEFORE
+        if AOCW.FLAGS.INIT_N_DAYS_FLAG in argv or AOCW.FLAGS.INIT_N_DAYS_FLAG_LONG in argv:
             for i in range(len(argv)):
-                if argv[i] == Config.FLAGS.INIT_N_DAYS_FLAG or argv[i] == Config.FLAGS.INIT_N_DAYS_FLAG_LONG:
+                if argv[i] == AOCW.FLAGS.INIT_N_DAYS_FLAG or argv[i] == AOCW.FLAGS.INIT_N_DAYS_FLAG_LONG:
                     if i == len(argv) - 1:
-                        self.state = Config.ERRORS.INVALID_ARGUMENTS
+                        self.state = AOCW.ERRORS.INVALID_ARGUMENTS
                         return
                     try:
                         n_days_before = int(argv[i+1])
                         assert n_days_before > 0
                     except:
-                        self.state = Config.ERRORS.INVALID_ARGUMENTS
+                        self.state = AOCW.ERRORS.INVALID_ARGUMENTS
                         return
                     break 
 
         #   set if the app is performing measurements or not
-        active : bool = Config.DEFAULTS.ACTIVE
-        if Config.FLAGS.INIT_ACTIVE_FLAG in argv or Config.FLAGS.INIT_ACTIVE_FLAG_LONG in argv:
+        active : bool = AOCW.DEFAULTS.ACTIVE
+        if AOCW.FLAGS.INIT_ACTIVE_FLAG in argv or AOCW.FLAGS.INIT_ACTIVE_FLAG_LONG in argv:
             for i in range(len(argv)):
-                if argv[i] == Config.FLAGS.INIT_ACTIVE_FLAG or argv[i] == Config.FLAGS.INIT_ACTIVE_FLAG_LONG:
+                if argv[i] == AOCW.FLAGS.INIT_ACTIVE_FLAG or argv[i] == AOCW.FLAGS.INIT_ACTIVE_FLAG_LONG:
                     if i == len(argv) - 1:
-                        self.state = Config.ERRORS.INVALID_ARGUMENTS
+                        self.state = AOCW.ERRORS.INVALID_ARGUMENTS
                         return
                     active = argv[i+1].lower()
                     if active == 'true':
@@ -313,7 +313,7 @@ class Config:
                     elif active == 'false':
                         active = False
                     else:
-                        self.state = Config.ERRORS.INVALID_ARGUMENTS
+                        self.state = AOCW.ERRORS.INVALID_ARGUMENTS
                         return
                     break 
 
@@ -323,17 +323,17 @@ class Config:
                 print(f"Creating local storage dir: {aocw_dir}")
                 os.mkdir(aocw_dir)
             except:
-                self.state = Config.ERRORS.COULD_NOT_CREATE_DIR
+                self.state = AOCW.ERRORS.COULD_NOT_CREATE_DIR
                 return  
 
         # Create log file:
-        log_file = os.path.join(aocw_dir, Config.DEFAULTS.LOG_FILE)
+        log_file = os.path.join(aocw_dir, AOCW.DEFAULTS.LOG_FILE)
         try:
             print(f"Creating log file in: {log_file}")
             with open(log_file, 'w') as log:
                 pass
         except:
-            self.state = Config.ERRORS.COULD_NOT_CREATE_LOG
+            self.state = AOCW.ERRORS.COULD_NOT_CREATE_LOG
             return
 
         # search for our config json
@@ -341,14 +341,14 @@ class Config:
 
         # ask the user to override the current file
         if os.path.exists(config_file):
-            should_override : str = input("Config file already exist. Override? [y/n]: ").lower()
+            should_override : str = input("AOCW file already exist. Override? [y/n]: ").lower()
             while should_override != 'y' and should_override != 'n':
                 print("Urecognized input")
-                should_override = input("Config file already exist. Override? [y/n]: ").lower()
+                should_override = input("AOCW file already exist. Override? [y/n]: ").lower()
             
             if should_override == 'n':
                 print("No changes made.")
-                self.state = Config.ERRORS.OK
+                self.state = AOCW.ERRORS.OK
                 return
 
         # Create the config file
@@ -356,19 +356,19 @@ class Config:
             with open(config_file, 'w') as f:
                 pass
         except:
-            self.state = Config.ERRORS.COULD_NOT_ACCESS_CONFIG_FILE
+            self.state = AOCW.ERRORS.COULD_NOT_ACCESS_CONFIG_FILE
             return
 
         try:
             permaConfig : PermaConfig = PermaConfig(log_file, list_file, initial_rate, active, n_days_before)
         except:
-            self.state = Config.ERRORS.COULD_NOT_SETUP_CONFIG_FILE
+            self.state = AOCW.ERRORS.COULD_NOT_SETUP_CONFIG_FILE
             return
     
         permaConfig.save()
         if (permaConfig.state != PermaConfig.ERROR.OK):
             print("Error: ", permaConfig.state)
-            self.state = Config.ERRORS.COULD_NOT_SETUP_CONFIG_FILE
+            self.state = AOCW.ERRORS.COULD_NOT_SETUP_CONFIG_FILE
             return
     
     def run(self, argv : List[str]):
@@ -382,14 +382,14 @@ class Config:
         permaConfig : PermaConfig = PermaConfig()
         permaConfig.load()
         if permaConfig.state != PermaConfig.ERROR.OK:
-            self.state = Config.ERRORS.COULD_NOT_ACCESS_CONFIG_FILE
+            self.state = AOCW.ERRORS.COULD_NOT_ACCESS_CONFIG_FILE
             return 
 
         # Open the log file in append mode
         try:
             log_file = open(permaConfig.log_file, 'a')
         except:
-            self.state = Config.ERRORS.COULD_NOT_ACCESS_LOG_FILE
+            self.state = AOCW.ERRORS.COULD_NOT_ACCESS_LOG_FILE
             return
 
         print(f"[INFO] {date2str(datetime.now())} Running check:", file=log_file)
@@ -442,7 +442,7 @@ class Config:
 
 
         except:
-            self.state = Config.ERRORS.COULD_NOT_ACCESS_LIST_FILE
+            self.state = AOCW.ERRORS.COULD_NOT_ACCESS_LIST_FILE
             return
 
         permaConfig.save()

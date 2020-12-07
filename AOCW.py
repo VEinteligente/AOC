@@ -9,7 +9,7 @@ import sys
 import AOCW_lib
 
 def main():
-    config = AOCW_lib.Config(sys.argv)
+    config = AOCW_lib.AOCW(sys.argv)
     print(config.state)
     pass
 
