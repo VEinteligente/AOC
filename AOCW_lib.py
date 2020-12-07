@@ -5,11 +5,16 @@
 """
 
 # Third party imports
+from    typing      import List
+from    datetime    import datetime, timedelta
+from    tabulate    import tabulate
+
 import json
 import sys
 import os
-from typing import List
-from datetime import datetime, timedelta
+import getpass
+import ssl, smtplib
+
 # Local imports
 import AOCBackend as aoc_bend
 
@@ -43,6 +48,15 @@ class PermaConfig:
     # measurement
     critical_anomaly_rate : float = 0.1
 
+    # address to send notifications
+    mail_to_notify = "your@email.com"
+
+    # mail address used to send notifications
+    sender_mail = "my@email.com"
+
+    # sender mail password
+    sender_mail_pswd = "supersecurepasssword"
+
     # Map from url to map of str to float indicating how much has changed 
     # every url. Map format:
     # url : {
@@ -54,12 +68,15 @@ class PermaConfig:
     #       }
     urls = {}
     def __init__(   self,
-                    log_file : str = None,
-                    list_file : str = None,
-                    critical_anomaly_rate : float = 0.1,
-                    active : bool = True,
-                    n_days_before : int = 1,
-                    urls : dict = {}
+                    log_file                : str = None,
+                    list_file               : str = None,
+                    critical_anomaly_rate   : float = 0.1,
+                    active                  : bool = True,
+                    n_days_before           : int = 1,
+                    mail_to_notify          : str = '',
+                    sender_mail             : str = None,
+                    sender_password         : str = None,
+                    urls                    : dict = {},
                 ):
 
         # Some consistency checking:
@@ -73,6 +90,9 @@ class PermaConfig:
         self.critical_anomaly_rate = critical_anomaly_rate
         self.n_days_before = n_days_before
         self.urls = urls
+        self.mail_to_notify = mail_to_notify
+        self.sender_mail = sender_mail
+        self.sender_mail_pswd = sender_password
 
     def to_json(self) -> str:
         """
@@ -84,7 +104,11 @@ class PermaConfig:
             "log_file" : self.log_file,
             "n_days_before" : self.n_days_before,
             "critical_anomaly_rate" : self.critical_anomaly_rate,
-            "urls" : self.urls
+            "urls" : self.urls,
+            "mail_to_notify" : self.mail_to_notify,
+            "sender_mail" : self.sender_mail,
+            "sender_mail_pswd" : self.sender_mail_pswd
+
         }
         return json.dumps(json_dict, indent=2)
 
@@ -123,6 +147,9 @@ class PermaConfig:
                 self.n_days_before          = data['n_days_before']
                 self.critical_anomaly_rate  = data['critical_anomaly_rate']
                 self.urls                   = data['urls']
+                self.sender_mail_pswd       = data['sender_mail_pswd']
+                self.sender_mail            = data['sender_mail']
+                self.mail_to_notify         = data['mail_to_notify']
         except:
             self.state = PermaConfig.ERROR.COULD_NOT_ACCESS_CONFIG_FILE
             return
@@ -138,8 +165,6 @@ class PermaConfig:
                "last_check"    : None,
                "last_update"   : None
            }
-        
-    
 
 
 class AOCW:
@@ -150,14 +175,38 @@ class AOCW:
             1) init: set the list to get the inputs from
             2) set: to change the value of some configuration
             3) show: to show a list with the last anomaly rate for every input in the list
+            4) run: to request data from ooni
     """
 
     #Enums to identify actions to perform and errors to check
     class ACTIONS:
-        INIT  : str = 'init'
-        SET   : str = 'set'
-        SHOW  : str = 'show'
-        RUN   : str = 'run'
+        INIT        : str = 'init'
+        INIT_HELP   : str = "Initalize the aocw, creating its local files and setting up initial parameters."
+        SET         : str = 'set'
+        SET_HELP    : str = 'Change customization parameters'
+        SHOW        : str = 'show'
+        SHOW_HELP   : str = 'Show currently collected data'
+        RUN         : str = 'run'
+        RUN_HELP    : str = 'Run computations over the specified list'
+        info = [
+            {
+                'action' : INIT,
+                'help'   : INIT_HELP
+            },
+            {
+                'action' : RUN,
+                'help'   : RUN_HELP
+            },
+            {
+                'action' : SET,
+                'help'   : SET_HELP
+            },
+            {
+                'action' : SHOW,
+                'help'   : SHOW_HELP
+            }
+
+        ]
 
     class ERRORS:
         OK : str = 'ok'
@@ -166,21 +215,11 @@ class AOCW:
         COULD_NOT_CREATE_DIR : str = 'could_not_create_dir' # could not create the config dir
         COULD_NOT_ACCESS_CONFIG_FILE : str = 'could_not_access_config_file'
         COULD_NOT_ACCESS_LOG_FILE : str = 'could_not_access_log_file'
-        COULD_NOT_ACCESS_LIST_FILE : str = 'could_not_access_LIST_file'
+        COULD_NOT_ACCESS_LIST_FILE : str = 'could_not_access_list_file'
         INVALID_ARGUMENTS : str = 'invalid_arguments'
         COULD_NOT_CREATE_LOG : str = 'could_not_create_log_file'
         MISSING_REQUIRED_ARGUMENT : str = 'missing_required_argument'
-        COULD_NOT_SETUP_CONFIG_FILE : str = 'COULD_NOT_SETUP_CONFIG_FILE'
-
-    class FLAGS:
-        INIT_FILE_FLAG : str = '-f'
-        INIT_FILE_FLAG_LONG : str = '--file'
-        INIT_RATE_FLAG : str = '-r'
-        INIT_RATE_FLAG_LONG : str = '--critical-rate'
-        INIT_ACTIVE_FLAG : str = '-a'
-        INIT_ACTIVE_FLAG_LONG : str = '--active'
-        INIT_N_DAYS_FLAG : str = '-n'
-        INIT_N_DAYS_FLAG_LONG : str = '--n-days'
+        COULD_NOT_SETUP_CONFIG_FILE : str = 'could_not_setup_config_file'
 
     class DEFAULTS:
         CONFIG_FILE : str = "config.json"
@@ -189,19 +228,59 @@ class AOCW:
         ACTIVE : bool = True
         N_DAYS_BEFORE : int = 1
 
+    class INIT_FLAGS:
+        INIT_FILE_FLAG      : str = '-f'
+        INIT_FILE_FLAG_LONG : str = '--file'
+        INIT_FILE_HELP      : str = "[REQUIRED] path to the file that contains the URL list to check when running"
+        INIT_RATE_FLAG      : str = '-r'
+        INIT_RATE_FLAG_LONG : str = '--critical-rate'
+        INIT_RATE_HELP      : str = "Specify the default anomaly rate. Defaults to 0.1"
+        INIT_ACTIVE_FLAG        : str = '-a'
+        INIT_ACTIVE_FLAG_LONG   : str = '--active'
+        INIT_ACTIVE_HELP        : str = "Specify if the program should keep asking for data (true or false). Defaults to true."
+        INIT_N_DAYS_FLAG        : str = '-n'
+        INIT_N_DAYS_FLAG_LONG   : str = '--n-days'
+        INIT_N_DAYS_HELP        : str = "specify the ammount of days before to consider"
+        INIT_EMAIL_FLAG         : str = "-e"
+        INIT_EMAIL_FLAG_LONG    : str = "-email-to-notify"
+        INIT_EMAIL_HELP         : str = "[REQUIRED] The email address to be notified when some weird event is happening"
+        info = [
+            {
+                "short" : INIT_FILE_FLAG,
+                "long"  : INIT_FILE_FLAG_LONG,
+                "help"  : INIT_FILE_HELP
+            },
+            {
+                "short" : INIT_RATE_FLAG,
+                "long"  : INIT_RATE_FLAG_LONG,
+                "help"  : INIT_RATE_HELP
+            },
+            {
+                "short" : INIT_ACTIVE_FLAG,
+                "long"  : INIT_ACTIVE_FLAG_LONG,
+                "help"  : INIT_ACTIVE_HELP
+            },
+            {
+                "short" : INIT_N_DAYS_FLAG,
+                "long"  : INIT_N_DAYS_FLAG_LONG,
+                "help"  : INIT_N_DAYS_HELP
+            },
+        ]
+
+
     # Member variables
     action: str = ACTIONS.SHOW
     state : str = ERRORS.OK
-
-
 
     def __init__(self, argv : List[str]):
         """
             argv : Input from the terminal, first argument is the action to perform 
         """
 
-        if len(argv) <= 1:
-            self.state = AOCW.ERRORS.NOT_ENOUGH_ARGS
+        if len(argv) == 1:
+            self.state = AOCW.ERRORS.OK
+            # Print some help
+            self.help()
             self.action = None
             return
         # Check which action is to be performed
@@ -222,17 +301,44 @@ class AOCW:
         # Perform actions as specified
         if action == AOCW.ACTIONS.INIT:
             self.init(argv)
-        if action == AOCW.ACTIONS.RUN:
+        elif action == AOCW.ACTIONS.RUN:
             self.run(argv)
+        elif action == AOCW.ACTIONS.SHOW:
+            self.show(argv)
         else:
             print("Not yet implemented 😿")
     
 
-    def alert(self):
+    def alert(self, permaConfig : PermaConfig, change : float, url : str, datestr : str):
         """
             Notify the user that a suspicious change has been found
         """
         print("🙀 ALERT 🙀")
+        # Set up email data
+        sender = permaConfig.sender_mail
+        reciever = permaConfig.mail_to_notify
+        psswd = permaConfig.sender_mail_pswd
+        message = f"Subject: [ALERT] url {url}\n\nUrl {url} registered an alarming change of {round(change,4)} at {datestr}"
+
+        # set up email server config
+        port = 465
+        context = ssl.create_default_context()
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", port, context=context) as server:
+            server.login(sender, psswd)   
+            server.sendmail(sender, reciever, message)
+
+
+    def help(self):
+        """
+            Print help message
+        """
+        print("Usage:\n   AOCW.py ACTION [ACTION OPTIONS]")
+        print(f"     Where ACTION = {AOCW.ACTIONS.INIT} | {AOCW.ACTIONS.RUN} | {AOCW.ACTIONS.SET} | {AOCW.ACTIONS.SHOW}")
+        for d in AOCW.ACTIONS.info:
+            print(f"        {d['action']} : {d['help']}")
+
+        print("Try --help option with any action to get more details")
 
     def init(self, argv : List[str]):
         """
@@ -241,7 +347,8 @@ class AOCW:
                 1) -f --file file : File with the list of urls to check [REQUIRED]
                 2) -r --critical-rate : a float number
                 3) -a --active true | false  : if the program should start running or not
-                4) -n --n-days int : how many days before to this to take in consideration 
+                4) -n --n-days int : how many days before to this to take in consideration
+                5) -e --email-to-notify str : the email address to send notifications to 
         """
         home = os.environ['HOME']
         aocw_dir : str = os.path.join(home, ".aocw")
@@ -249,9 +356,9 @@ class AOCW:
         # Parse the provided arguments
         list_file : str = None
         #   set the file
-        if AOCW.FLAGS.INIT_FILE_FLAG in argv or AOCW.FLAGS.INIT_FILE_FLAG_LONG in argv:
+        if AOCW.INIT_FLAGS.INIT_FILE_FLAG in argv or AOCW.INIT_FLAGS.INIT_FILE_FLAG_LONG in argv:
             for i in range(len(argv)):
-                if argv[i] == AOCW.FLAGS.INIT_FILE_FLAG or argv[i] == AOCW.FLAGS.INIT_FILE_FLAG_LONG:
+                if argv[i] == AOCW.INIT_FLAGS.INIT_FILE_FLAG or argv[i] == AOCW.INIT_FLAGS.INIT_FILE_FLAG_LONG:
                     if i == len(argv) - 1:
                         self.state = AOCW.ERRORS.INVALID_ARGUMENTS
                         return
@@ -269,9 +376,9 @@ class AOCW:
 
         #   set the critical rate value
         initial_rate = AOCW.DEFAULTS.CRITICAL_RATE
-        if AOCW.FLAGS.INIT_RATE_FLAG in argv or AOCW.FLAGS.INIT_RATE_FLAG_LONG in argv:
+        if AOCW.INIT_FLAGS.INIT_RATE_FLAG in argv or AOCW.INIT_FLAGS.INIT_RATE_FLAG_LONG in argv:
             for i in range(len(argv)):
-                if argv[i] == AOCW.FLAGS.INIT_RATE_FLAG or argv[i] == AOCW.FLAGS.INIT_RATE_FLAG_LONG:
+                if argv[i] == AOCW.INIT_FLAGS.INIT_RATE_FLAG or argv[i] == AOCW.INIT_FLAGS.INIT_RATE_FLAG_LONG:
                     if i == len(argv) - 1:
                         self.state = AOCW.ERRORS.INVALID_ARGUMENTS
                         return
@@ -285,9 +392,9 @@ class AOCW:
 
         #   set the n-days value
         n_days_before = AOCW.DEFAULTS.N_DAYS_BEFORE
-        if AOCW.FLAGS.INIT_N_DAYS_FLAG in argv or AOCW.FLAGS.INIT_N_DAYS_FLAG_LONG in argv:
+        if AOCW.INIT_FLAGS.INIT_N_DAYS_FLAG in argv or AOCW.INIT_FLAGS.INIT_N_DAYS_FLAG_LONG in argv:
             for i in range(len(argv)):
-                if argv[i] == AOCW.FLAGS.INIT_N_DAYS_FLAG or argv[i] == AOCW.FLAGS.INIT_N_DAYS_FLAG_LONG:
+                if argv[i] == AOCW.INIT_FLAGS.INIT_N_DAYS_FLAG or argv[i] == AOCW.INIT_FLAGS.INIT_N_DAYS_FLAG_LONG:
                     if i == len(argv) - 1:
                         self.state = AOCW.ERRORS.INVALID_ARGUMENTS
                         return
@@ -301,9 +408,9 @@ class AOCW:
 
         #   set if the app is performing measurements or not
         active : bool = AOCW.DEFAULTS.ACTIVE
-        if AOCW.FLAGS.INIT_ACTIVE_FLAG in argv or AOCW.FLAGS.INIT_ACTIVE_FLAG_LONG in argv:
+        if AOCW.INIT_FLAGS.INIT_ACTIVE_FLAG in argv or AOCW.INIT_FLAGS.INIT_ACTIVE_FLAG_LONG in argv:
             for i in range(len(argv)):
-                if argv[i] == AOCW.FLAGS.INIT_ACTIVE_FLAG or argv[i] == AOCW.FLAGS.INIT_ACTIVE_FLAG_LONG:
+                if argv[i] == AOCW.INIT_FLAGS.INIT_ACTIVE_FLAG or argv[i] == AOCW.INIT_FLAGS.INIT_ACTIVE_FLAG_LONG:
                     if i == len(argv) - 1:
                         self.state = AOCW.ERRORS.INVALID_ARGUMENTS
                         return
@@ -316,6 +423,20 @@ class AOCW:
                         self.state = AOCW.ERRORS.INVALID_ARGUMENTS
                         return
                     break 
+
+        #   parse the email to notify
+        email : str = None
+        if AOCW.INIT_FLAGS.INIT_EMAIL_FLAG in argv or AOCW.INIT_FLAGS.INIT_EMAIL_FLAG_LONG in argv:
+            for i in range(len(argv)):
+                if argv[i] == AOCW.INIT_FLAGS.INIT_EMAIL_FLAG or argv[i] == AOCW.INIT_FLAGS.INIT_EMAIL_FLAG_LONG:
+                    if i == len(argv) - 1:
+                        self.state = AOCW.ERRORS.INVALID_ARGUMENTS
+                        return
+                    email = argv[i+1]
+                    break 
+        else:
+            self.state = AOCW.ERRORS.MISSING_REQUIRED_ARGUMENT
+            return
 
         # Create data dir if not exists
         if not os.path.exists(aocw_dir):
@@ -359,12 +480,48 @@ class AOCW:
             self.state = AOCW.ERRORS.COULD_NOT_ACCESS_CONFIG_FILE
             return
 
+        YELLOW = "\u001b[33m"
+        ENDC = '\033[0m'
+        # Get sender mail
+        confirm = False
+        print("We need a gmail email address that will send notifications in case of some anomaly.")
+        print(f"{YELLOW}WARNING: We highly recommend you to create a dummy email account for this purpose since we can ensure{ENDC}")
+        print(f"{YELLOW}your security for now.{ENDC}")
+        sender_mail = ''
+        while not confirm:
+            sender_mail : str = input("Sender mail: ")
+            print(f"Your sender account will be: {sender_mail}")
+            yn = input("Are you agree?[y/n]: ").lower()
+            while yn != 'y' and yn != 'n':
+                print("unrecognized input")
+                yn = input("Are you agree?[y/n]: ").lower()
+
+            if yn == 'y':
+                confirm = True
+
+        # Get sender password
+        sender_pswd = ''
+        confirm = False
+        while not confirm:
+            sender_pswd = getpass.getpass(f"Password for {sender_mail}: ")
+            confirmation_pswd = getpass.getpass("Confirm password: ")
+            confirm = sender_pswd == confirmation_pswd
+            if not confirm:
+                print("Password not matching, retry")
+
         try:
-            permaConfig : PermaConfig = PermaConfig(log_file, list_file, initial_rate, active, n_days_before)
+            permaConfig : PermaConfig = PermaConfig(log_file, 
+                                                    list_file, 
+                                                    initial_rate, 
+                                                    active, 
+                                                    n_days_before,
+                                                    email,
+                                                    sender_mail,
+                                                    sender_pswd)
         except:
             self.state = AOCW.ERRORS.COULD_NOT_SETUP_CONFIG_FILE
             return
-    
+
         permaConfig.save()
         if (permaConfig.state != PermaConfig.ERROR.OK):
             print("Error: ", permaConfig.state)
@@ -384,6 +541,10 @@ class AOCW:
         if permaConfig.state != PermaConfig.ERROR.OK:
             self.state = AOCW.ERRORS.COULD_NOT_ACCESS_CONFIG_FILE
             return 
+
+        # Check if the program is currently active
+        if not permaConfig.active:
+            return
 
         # Open the log file in append mode
         try:
@@ -437,7 +598,7 @@ class AOCW:
                     permaConfig.urls[line]['last_update']   = date2str(now)
                     
                     if change > permaConfig.critical_anomaly_rate:
-                        self.alert()
+                        self.alert(permaConfig, change, line, date2str(now))
                         print(f"[ALERT] {date2str(now)} Change of {round(change, 3)} for url: {line}", file=log_file)
 
 
@@ -447,3 +608,52 @@ class AOCW:
 
         permaConfig.save()
         log_file.close()
+
+    def show(self, argv : List[str]):
+        """
+            Print the current config and the currently stored data
+        """
+        # Load local data
+        permaConfig : PermaConfig = PermaConfig()
+        permaConfig.load()
+        if permaConfig.state != PermaConfig.ERROR.OK:
+            self.state = AOCW.ERRORS.COULD_NOT_ACCESS_CONFIG_FILE
+            return
+
+
+        # For string coloring:
+        RED  = '\033[91m'
+        YELLOW = "\u001b[33m"
+        GREEN  = "\u001b[32m" 
+        BLUE   = "\u001b[36m"
+        ENDC = '\033[0m'
+        critical_rate : float = permaConfig.critical_anomaly_rate
+        alert = lambda f : f"{RED if f > critical_rate else ''}{f}{ENDC if f > critical_rate else ''}"
+
+        # Build the table
+        header : List[str] = ["input", "last check", "last update", "previous rate", "current rate", "change"]
+        header = map(lambda s : f"{BLUE}{s}{ENDC}",header)
+
+        body = [
+            [  
+                inpt, details["last_check"], details["last_update"], 
+                f"{round(details['previous_rate'], 3)}", 
+                f"{round(details['current_rate'], 3)}",
+                f"{alert(round(details['change'], 3))}", 
+            ]
+            for (inpt, details) in permaConfig.urls.items()
+        ]
+        table = [header] + body
+
+
+        print(f"List file: {YELLOW}{permaConfig.list_file}{ENDC}")
+        print(f"Specified critical rate: {RED}{permaConfig.critical_anomaly_rate}{ENDC}")
+        print(f"Checking {GREEN}{permaConfig.n_days_before}{ENDC} days before the current day to request for measurements")
+        if permaConfig.active:
+            print(f"Active: {GREEN} true {ENDC}")
+        else:
+            print(f"Active: {RED} false {ENDC}")
+        print(tabulate(table))
+        
+        
+        
