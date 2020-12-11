@@ -205,7 +205,6 @@ class AOCW:
                 'action' : SHOW,
                 'help'   : SHOW_HELP
             }
-
         ]
 
     class ERRORS:
@@ -314,9 +313,16 @@ class AOCW:
             print("Not yet implemented 😿")
     
 
-    def alert(self, permaConfig : PermaConfig, change : float, url : str, datestr : str):
+    def alert(self, permaConfig : PermaConfig, change : float, url : str, datestr : str, logfile = None):
         """
             Notify the user that a suspicious change has been found
+
+            permaConfig: The config object currently in use
+            change: The actual change delta found 
+            url: The url with anomalies
+            datestr: Date when this anomaly was found (in string)
+            logfile: A file object containing the logfile used to log for errors.
+
         """
         print("🙀 ALERT 🙀")
         # Set up email data
@@ -328,11 +334,14 @@ class AOCW:
         # set up email server config
         port = 465
         context = ssl.create_default_context()
-
-        with smtplib.SMTP_SSL("smtp.gmail.com", port, context=context) as server:
-            server.login(sender, psswd)   
-            server.sendmail(sender, reciever, message)
-
+        try:
+            with smtplib.SMTP_SSL("smtp.gmail.com", port, context=context) as server:
+                server.login(sender, psswd)   
+                server.sendmail(sender, reciever, message)
+        except:
+            if logfile:
+                print(f"[ERROR] {datestr} Could not send email to {permaConfig.mail_to_notify} from {permaConfig.sender_mail} of anomaly with change {round(change,4)} \
+                        with url {url}", file=logfile)
 
     def help(self):
         """
@@ -659,6 +668,13 @@ class AOCW:
             ]
             for (inpt, details) in permaConfig.urls.items()
         ]
+
+        # If there's no rows to show:
+        if len(body) == 0:
+            body.append(
+                ["-- No sites to show --"]
+            )
+
         table = [header] + body
 
 
