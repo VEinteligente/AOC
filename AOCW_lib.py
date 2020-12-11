@@ -664,7 +664,7 @@ class AOCW:
                 inpt, details["last_check"], details["last_update"], 
                 f"{round(details['previous_rate'], 3)}", 
                 f"{round(details['current_rate'], 3)}",
-                f"{alert(round(details['change'], 3))}", 
+                f"{alert(round(details['change'], 3)) if details['change'] else 'No change to show'}", 
             ]
             for (inpt, details) in permaConfig.urls.items()
         ]
