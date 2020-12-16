@@ -184,10 +184,11 @@ def get_measurements(   since : datetime,
         for r in result
     ]
 
-def get_measurements_list_api(  since : datetime, 
-                                until : datetime, 
-                                domain : str = None, 
-                                probe_cc : str = 'VE', 
+def get_measurements_list_api(  since     : datetime, 
+                                until     : datetime, 
+                                domain    : str = None, 
+                                probe_cc  : str = 'VE', 
+                                isp       : str = None,
                                 test_name : str = None) -> List[MeasurementDay]:
     """
         same as get_measurements but with a different ooni api
@@ -215,6 +216,10 @@ def get_measurements_list_api(  since : datetime,
     # filter by test name only if provided
     if test_name:
         params['test_name'] = test_name
+
+    # filter by isp if needed 
+    if isp:
+        params['isp'] = isp
 
     next_url = url + urlencode(params)
     results = []
